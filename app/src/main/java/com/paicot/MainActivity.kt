@@ -2,7 +2,8 @@ package com.paicot
 
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import android.media.MediaProjection
+import android.media.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,6 +13,9 @@ import androidx.core.content.ContextCompat
 import com.paicot.server.PaicotForegroundService
 import com.paicot.ui.PaicotRoot
 import com.paicot.ui.theme.PaicotTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Single-activity Compose host. Handles the three ActivityResult flows that
@@ -25,8 +29,7 @@ class MainActivity : ComponentActivity() {
         if (uri != null) {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             contentResolver.takePersistableUriPermission(uri, flags)
-            Paicot.fileManager.let { }
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            CoroutineScope(Dispatchers.IO).launch {
                 Paicot.prefs.setSafTreeUri(uri.toString())
             }
             com.paicot.core.PaicotLogger.i("files", "SAF tree granted: $uri")
@@ -35,7 +38,7 @@ class MainActivity : ComponentActivity() {
 
     private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
-            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.MediaProjectionManager
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             Paicot.mediaProjection = manager.getMediaProjection(result.resultCode, result.data!!)
             com.paicot.core.PaicotLogger.i("screen", "Screen-capture consent granted")
         }

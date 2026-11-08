@@ -1,7 +1,7 @@
 package com.paicot
 
 import android.app.Application
-import android.app.MediaProjection
+import android.media.MediaProjection
 import android.content.Context
 import androidx.room.Room
 import com.paicot.applications.AppManager
