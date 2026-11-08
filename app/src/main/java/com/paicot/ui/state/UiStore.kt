@@ -75,7 +75,7 @@ data class SettingsState(
 
 data class ApiHubState(
     val modules: List<String> = emptyList(),
-    val version: String = "0.1.0"
+    val version: String = "0.2.0"
 )
 
 // ----- Store -----------------------------------------------------------------
@@ -255,7 +255,7 @@ object UiStore {
         apiHub.value = ApiHubState(
             modules = listOf("apps", "screen", "keyboard", "accessibility", "display",
                 "files", "notifications", "device", "automation", "server"),
-            version = "0.1.0"
+            version = "0.2.0"
         )
     }
 

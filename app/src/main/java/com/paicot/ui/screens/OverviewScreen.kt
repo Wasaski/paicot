@@ -32,7 +32,7 @@ fun OverviewScreen(state: OverviewState, onRefresh: () -> Unit, onGoPermissions:
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("PAICOT", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
             AssistChip(onClick = onRefresh, label = { Text("Refresh") }, modifier = Modifier.heightIn(min = 48.dp))
-            Text("0.1.0", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("0.2.0", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("Overview", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
