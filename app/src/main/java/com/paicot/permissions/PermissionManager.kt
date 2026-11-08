@@ -67,7 +67,9 @@ class PermissionManager(private val context: Context) {
     fun openAppSettings(): Intent = Intent(
         Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         android.net.Uri.parse("package:${context.packageName}"))
-    fun openCaptureIntent(): Intent =
-        (context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.MediaProjectionManager)
-            .createScreenCaptureIntent()
+    fun openCaptureIntent(): Intent {
+        val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+        val intent = manager.javaClass.getMethod("createScreenCaptureIntent").invoke(manager)
+        return intent as Intent
+    }
 }

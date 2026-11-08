@@ -16,10 +16,7 @@ import java.io.File
 class DeviceManager(private val context: Context) {
 
     fun info(): DeviceInfo {
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val bounds = android.graphics.Rect()
-        @Suppress("DEPRECATION")
-        wm.defaultDisplay?.getRect(bounds)
+        val dm = context.resources.displayMetrics
         val battery = battery()
         return DeviceInfo(
             manufacturer = Build.MANUFACTURER,
@@ -31,8 +28,8 @@ class DeviceManager(private val context: Context) {
             sdkInt = Build.VERSION.SDK_INT,
             board = Build.BOARD,
             hardware = Build.HARDWARE,
-            screenWidthPx = bounds.width(),
-            screenHeightPx = bounds.height(),
+            screenWidthPx = dm.widthPixels,
+            screenHeightPx = dm.heightPixels,
             density = context.resources.displayMetrics.density,
             totalMemoryBytes = android.app.ActivityManager.MemoryInfo().let {
                 (context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager)

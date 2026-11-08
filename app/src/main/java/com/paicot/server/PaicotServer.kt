@@ -291,9 +291,9 @@ class PaicotServer(private val context: Context) {
     private fun wsTextFrame(text: String): ByteArray {
         val payload = text.toByteArray(StandardCharsets.UTF_8)
         return when {
-            payload.size < 126 -> byteArrayOf(0x81, payload.size.toByte()) + payload
-            payload.size < 65536 -> byteArrayOf(0x81, 126, (payload.size ushr 8).toByte(), payload.size.toByte()) + payload
-            else -> byteArrayOf(0x81, 127, 0, 0, 0, 0,
+            payload.size < 126 -> byteArrayOf((0x81).toByte(), payload.size.toByte()) + payload
+            payload.size < 65536 -> byteArrayOf((0x81).toByte(), 126, (payload.size ushr 8).toByte(), payload.size.toByte()) + payload
+            else -> byteArrayOf((0x81).toByte(), 127, 0, 0, 0, 0,
                 (payload.size ushr 24).toByte(), (payload.size ushr 16).toByte(),
                 (payload.size ushr 8).toByte(), payload.size.toByte()) + payload
         }

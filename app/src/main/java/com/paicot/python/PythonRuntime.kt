@@ -132,7 +132,7 @@ class PythonRuntime(
 
     private fun interpret(id: String, out: Any?, startedAt: Long, source: String): ExecutionResult {
         val finishedAt = System.currentTimeMillis()
-        val map = (out as? PyObject)?.asMap() ?: return ExecutionResult(
+        val map = ((out as? PyObject)?.asMap() as? Map<String, Any?>) ?: return ExecutionResult(
             id = id, state = ExecutionState.FAILED,
             error = "Unexpected runner output: $out",
             startedAt = startedAt, finishedAt = finishedAt,

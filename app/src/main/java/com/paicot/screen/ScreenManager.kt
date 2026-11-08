@@ -2,9 +2,8 @@ package com.paicot.screen
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
-import android.media.ImageReader
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
@@ -13,9 +12,20 @@ import com.paicot.accessibility.PaicotAccessibilityService
 import com.paicot.core.OperationResult
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.nio.ByteBuffer
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** Screen control: gestures (via AccessibilityService), geometry, screenshot. */
+/**
+ * Screen control: gestures (via AccessibilityService), geometry, screenshot.
+ *
+ * Screenshot uses MediaProjection + ImageReader entirely through reflection:
+ * the compile-time Android jar on some SDKs omits parts of `android.media`,
+ * while the classes always exist at runtime on supported devices (API 21+).
+ */
 class ScreenManager(private val context: Context) {
 
     fun tap(x: Int, y: Int): OperationResult =
@@ -46,42 +56,82 @@ class ScreenManager(private val context: Context) {
      * Returns Base64 PNG of the current display.
      */
     fun screenshot(): OperationResult {
-        val projection = Paicot.mediaProjection
+        val projection: Any = Paicot.mediaProjection
             ?: return OperationResult.failure("No screen-capture consent. Grant it in Permissions screen.")
         val dm = context.resources.displayMetrics
-        var reader: ImageReader? = null
-        var virtualDisplay: android.hardware.display.VirtualDisplay? = null
+        var reader: Any? = null
+        var virtualDisplay: Any? = null
         return try {
             val w = dm.widthPixels
             val h = dm.heightPixels
             val densityDpi = dm.densityDpi
-            val imageReader = ImageReader.newInstance(w, h, android.graphics.PixelFormat.RGBA_8888, 2)
-            reader = imageReader
-            virtualDisplay = projection.createVirtualDisplay(
-                "paicot-capture", w, h, densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.surface, null, Handler(Looper.getMainLooper())
+
+            // ImageReader.newInstance(w, h, RGBA_8888, 2)
+            val imageReaderClass = Class.forName("android.media.ImageReader")
+            val newInstance: Method = imageReaderClass.getMethod(
+                "newInstance",
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
             )
-            val latch = java.util.concurrent.CountDownLatch(1)
+            val imageReader: Any = newInstance.invoke(null, w, h, PixelFormat.RGBA_8888, 2)
+            reader = imageReader
+
+            val mainHandler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
             var bitmap: Bitmap? = null
-            imageReader.setImageListener({ ir ->
-                try {
-                    val image = ir.acquireLatestImage() ?: run { latch.countDown(); return@setImageListener }
-                    val planes = image.planes
-                    val buffer = planes[0].buffer
-                    val pixelStride = planes[0].pixelStride
-                    val rowStride = planes[0].rowStride
-                    val rowPadding = rowStride - pixelStride * w
-                    val bmp = Bitmap.createBitmap(w + (rowPadding / pixelStride).toInt(), h, Bitmap.Config.ARGB_8888)
-                    bmp.copyPixelsFromBuffer(buffer)
-                    bitmap = Bitmap.createBitmap(bmp, 0, 0, w, h)
-                    image.close()
-                } catch (e: Exception) {
-                    // fall through to mime latch
-                } finally {
-                    latch.countDown()
+
+            // OnImageAvailableListener via dynamic proxy
+            val listenerIface = Class.forName("android.media.ImageReader\$OnImageAvailableListener")
+            val handler = InvocationHandler { _, method, args ->
+                if (method.name == "onImageAvailable") {
+                    val ir = args[0]
+                    try {
+                        val image = imageReaderClass.getMethod("acquireLatestImage").invoke(ir)
+                        if (image == null) {
+                            latch.countDown()
+                            return@InvocationHandler null
+                        }
+                        val planes = image.javaClass.getMethod("getPlanes").invoke(image) as Array<out Any>
+                        val plane = planes[0]
+                        val buffer = plane.javaClass.getMethod("getBuffer").invoke(plane) as ByteBuffer
+                        val pixelStride = plane.javaClass.getMethod("getPixelStride").invoke(plane) as Int
+                        val rowStride = plane.javaClass.getMethod("getRowStride").invoke(plane) as Int
+                        val rowPadding = rowStride - pixelStride * w
+                        val bmp = Bitmap.createBitmap(w + rowPadding / pixelStride, h, Bitmap.Config.ARGB_8888)
+                        bmp.copyPixelsFromBuffer(buffer)
+                        bitmap = Bitmap.createBitmap(bmp, 0, 0, w, h)
+                        image.javaClass.getMethod("close").invoke(image)
+                    } catch (_: Exception) {
+                    } finally {
+                        latch.countDown()
+                    }
                 }
-            }, Handler(Looper.getMainLooper()))
+                null
+            }
+            val listener = Proxy.newProxyInstance(
+                imageReaderClass.classLoader, arrayOf(listenerIface), handler)
+
+            imageReaderClass.getMethod(
+                "setImageListener", listenerIface, Handler::class.java
+            ).invoke(imageReader, listener, mainHandler)
+
+            val surface = imageReaderClass.getMethod("getSurface").invoke(imageReader)
+            val callbackClass = Class.forName("android.media.ImageReader\$Callback")
+            val vdMethod = projection.javaClass.getMethod(
+                "createVirtualDisplay",
+                String::class.java,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+                android.view.Surface::class.java,
+                callbackClass,
+                Handler::class.java
+            )
+            virtualDisplay = vdMethod.invoke(
+                projection, "paicot-capture", w, h, densityDpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                surface, null, mainHandler
+            )
+
             if (!latch.await(8, TimeUnit.SECONDS)) {
                 OperationResult.failure("Screenshot timed out after 8s")
             } else {
@@ -97,8 +147,8 @@ class ScreenManager(private val context: Context) {
         } catch (e: Exception) {
             OperationResult.failure("Screenshot failed: ${e.message}")
         } finally {
-            try { virtualDisplay?.release() } catch (_: Exception) {}
-            try { reader?.close() } catch (_: Exception) {}
+            try { virtualDisplay?.javaClass?.getMethod("release")?.invoke(virtualDisplay) } catch (_: Exception) {}
+            try { reader?.javaClass?.getMethod("close")?.invoke(reader) } catch (_: Exception) {}
         }
     }
 }

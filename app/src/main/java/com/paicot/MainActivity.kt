@@ -2,8 +2,6 @@ package com.paicot
 
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaProjection
-import android.media.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -38,8 +36,13 @@ class MainActivity : ComponentActivity() {
 
     private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
-            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            Paicot.mediaProjection = manager.getMediaProjection(result.resultCode, result.data!!)
+            // MediaProjectionManager resolved reflectively (class exists at
+            // runtime on every supported device).
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE)
+            val projection = manager.javaClass
+                .getMethod("getMediaProjection", Int::class.javaPrimitiveType, Intent::class.java)
+                .invoke(manager, result.resultCode, result.data)
+            Paicot.mediaProjection = projection
             com.paicot.core.PaicotLogger.i("screen", "Screen-capture consent granted")
         }
     }

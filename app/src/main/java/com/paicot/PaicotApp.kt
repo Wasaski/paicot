@@ -1,7 +1,6 @@
 package com.paicot
 
 import android.app.Application
-import android.media.MediaProjection
 import android.content.Context
 import androidx.room.Room
 import com.paicot.applications.AppManager
@@ -65,8 +64,9 @@ object Paicot {
     lateinit var automationManager: AutomationManager
         private set
 
-    /** MediaProjection token granted by the user in MainActivity (screenshot consent). */
-    @Volatile var mediaProjection: MediaProjection? = null
+    /** MediaProjection token granted by the user in MainActivity (screenshot consent).
+     * Held as Any because the class itself is invoked reflectively. */
+    @Volatile var mediaProjection: Any? = null
 
     fun init(context: Context) {
         app = context.applicationContext

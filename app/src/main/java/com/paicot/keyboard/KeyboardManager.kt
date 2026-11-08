@@ -1,10 +1,8 @@
 package com.paicot.keyboard
 
 import android.content.ClipData
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
-import android.os.PersistableBundle
 import android.view.accessibility.AccessibilityNodeInfo
 import com.paicot.accessibility.PaicotAccessibilityService
 import com.paicot.core.OperationResult
@@ -52,7 +50,3 @@ class KeyboardManager(private val context: Context) {
 
     private val GLOBAL_KEYS = setOf("back", "home", "recents", "notifications", "quick_settings", "power_dialog")
 }
-
-/** Silences the unused-import lint for clipboard description helpers. */
-@Suppress("unused")
-private fun ClipData.hasText(): Boolean = description.hasPrimaryMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN)
