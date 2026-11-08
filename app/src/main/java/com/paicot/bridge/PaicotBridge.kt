@@ -117,8 +117,8 @@ class PaicotBridge(private val context: Context) {
 
     // --- display --------------------------------------------------------------
 
-    fun display_show(title: String, body: String = ""): String {
-        val r = Paicot.displayManager.showPanel(title, body)
+    fun display_show(title: String, body: String = "", x: Int = 60, y: Int = 200): String {
+        val r = Paicot.displayManager.showPanel(title, body, x, y)
         return if (r.ok) ok(r.data) else fail(r.error!!)
     }
 
