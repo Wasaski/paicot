@@ -38,8 +38,23 @@ class PythonRuntime(
     @Volatile var initError: String? = null
         private set
 
-    private val executor = Executors.newSingleThreadExecutor { r ->
+    @Volatile
+    private var executor = newScriptExecutor()
+
+    private fun newScriptExecutor() = Executors.newSingleThreadExecutor { r ->
         Thread(r, "paicot-python").apply { isDaemon = true }
+    }
+
+    /**
+     * On timeout the stuck script thread is un-killable in Python; instead of
+     * letting every later script queue behind it forever, snap the executor
+     * to a fresh thread and abandon the broken one (it stays a daemon until
+     * the process dies).
+     */
+    private fun abandonStuckThread() {
+        PaicotLogger.w("python", "Replacing python executor after timeout")
+        try { executor.shutdownNow() } catch (_: Exception) {}
+        executor = newScriptExecutor()
     }
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -103,6 +118,7 @@ class PythonRuntime(
             future.get(timeoutSeconds, TimeUnit.SECONDS)
         } catch (e: java.util.concurrent.TimeoutException) {
             bridge.cancelRequested = true
+            abandonStuckThread()
             ExecutionResult(
                 id = id, state = ExecutionState.TIMED_OUT,
                 error = "Execution exceeded ${timeoutSeconds}s",

@@ -4,9 +4,11 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import com.paicot.Paicot
 import com.paicot.core.PaicotLogger
 import kotlinx.coroutines.CoroutineScope
@@ -14,13 +16,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Keeps the local HTTP server alive while the app is backgrounded.
- * Server state (running/error/bound port) is visible in Settings/Overview —
- * startup failures are recorded, never swallowed.
+ * Keeps the local HTTP server alive while the app is backgrounded:
+ * foreground notification + PARTIAL_WAKE_LOCK. Server state (running/error/
+ * bound port) is visible in Settings/Overview — startup failures are
+ * recorded, never swallowed.
  */
 class PaicotForegroundService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.IO)
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?) = null
 
@@ -28,6 +32,7 @@ class PaicotForegroundService : Service() {
         super.onCreate()
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Starting server..."))
+        acquireWakeLock()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,7 +58,30 @@ class PaicotForegroundService : Service() {
 
     override fun onDestroy() {
         Paicot.server.stop()
+        releaseWakeLock()
         super.onDestroy()
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK, "paicot:server"
+            ).apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+            PaicotLogger.i("server", "WakeLock acquired")
+        } catch (e: Exception) {
+            PaicotLogger.w("server", "WakeLock failed: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (_: Exception) {}
+        wakeLock = null
     }
 
     private fun createChannel() {
@@ -89,7 +117,7 @@ class PaicotForegroundService : Service() {
         private const val CHANNEL_ID = "paicot_server"
         private const val NOTIFICATION_ID = 1001
 
-        fun start(context: android.content.Context) {
+        fun start(context: Context) {
             val intent = Intent(context, PaicotForegroundService::class.java).apply { action = ACTION_START }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -98,7 +126,7 @@ class PaicotForegroundService : Service() {
             }
         }
 
-        fun stop(context: android.content.Context) {
+        fun stop(context: Context) {
             val intent = Intent(context, PaicotForegroundService::class.java).apply { action = ACTION_STOP }
             context.startService(intent)
         }

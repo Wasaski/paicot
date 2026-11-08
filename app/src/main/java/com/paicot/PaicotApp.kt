@@ -29,6 +29,13 @@ class PaicotApp : Application() {
         super.onCreate()
         Paicot.init(this)
         PaicotLogger.i("app", "PAICOT started")
+        // Auto-start the local server as a foreground service so it survives
+        // the user switching away. Failures are logged, never fatal.
+        try {
+            com.paicot.server.PaicotForegroundService.start(this)
+        } catch (e: Exception) {
+            PaicotLogger.e("app", "Auto-start server failed: ${e.message}")
+        }
     }
 }
 

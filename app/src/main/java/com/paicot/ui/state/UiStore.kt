@@ -210,17 +210,15 @@ object UiStore {
     }
 
     fun startServer() {
-        scope.launch(Dispatchers.IO) {
-            Paicot.server.start()
-            kotlinx.coroutines.withContext(Dispatchers.Main) {
-                settings.value = settings.value.copy(message = "Server start requested")
-                refreshSettings(); refreshOverview()
-            }
-        }
+        // Foreground service keeps the server alive in background (wake lock
+        // + notification). Never start the raw server alone from the UI.
+        com.paicot.server.PaicotForegroundService.start(Paicot.app)
+        settings.value = settings.value.copy(message = "Server start requested")
+        refreshSettings(); refreshOverview()
     }
 
     fun stopServer() {
-        Paicot.server.stop()
+        com.paicot.server.PaicotForegroundService.stop(Paicot.app)
         settings.value = settings.value.copy(message = "Server stopped")
         refreshSettings(); refreshOverview()
     }

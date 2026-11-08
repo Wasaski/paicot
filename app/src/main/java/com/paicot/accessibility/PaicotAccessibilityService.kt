@@ -3,7 +3,6 @@ package com.paicot.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
-import android.graphics.PointF
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.paicot.core.OperationResult
@@ -15,6 +14,10 @@ import org.json.JSONObject
  * scripting bridge can dispatch gestures and read the accessibility tree.
  * All actions are real: dispatchGesture (tap/swipe/long-press) and node
  * inspection/click. Nothing here promises root or shell access.
+ *
+ * Tree walks are breadth-first with a hard node cap + deadline: big app trees
+ * (e.g. Chrome) have thousands of nodes, an unbounded recursive walk can pin
+ * the scripting thread for minutes (this exact failure wedged the API once).
  */
 class PaicotAccessibilityService : AccessibilityService() {
 
@@ -81,8 +84,12 @@ class PaicotAccessibilityService : AccessibilityService() {
     fun findByText(text: String, limit: Int = 20): OperationResult {
         val svc = instance ?: return OperationResult.failure("Accessibility service not connected")
         val root = svc.rootInActiveWindow ?: return OperationResult.failure("No active window")
+        val deadline = System.nanoTime() + FIND_DEADLINE_MS * 1_000_000L
         val found = mutableListOf<JSONObject>()
-        collect(root, limit) { node ->
+        var visited = 0
+        walkBreadthFirst(root, deadline, MAX_VISITED_NODES) { node ->
+            if (visited > MAX_VISITED_NODES || System.nanoTime() > deadline) return@walkBreadthFirst
+            visited++
             val t = node.text?.toString() ?: ""
             val desc = node.contentDescription?.toString() ?: ""
             if (t.contains(text, ignoreCase = true) || desc.contains(text, ignoreCase = true)) {
@@ -98,15 +105,21 @@ class PaicotAccessibilityService : AccessibilityService() {
                     .put("center_y", b.centerY())
             }
         }
-        return OperationResult.success(JSONObject().put("elements", JSONArray(found)))
+        return OperationResult.success(
+            JSONObject()
+                .put("elements", JSONArray(found))
+                .put("visited_nodes", visited))
     }
 
     fun clickByText(text: String): OperationResult {
         val svc = instance ?: return OperationResult.failure("Accessibility service not connected")
         val root = svc.rootInActiveWindow ?: return OperationResult.failure("No active window")
+        val deadline = System.nanoTime() + FIND_DEADLINE_MS * 1_000_000L
         var clicked: JSONObject? = null
-        collect(root, 200) { node ->
-            if (clicked != null) return@collect
+        var visited = 0
+        walkBreadthFirst(root, deadline, MAX_VISITED_NODES) { node ->
+            if (clicked != null || visited > MAX_VISITED_NODES || System.nanoTime() > deadline) return@walkBreadthFirst
+            visited++
             val t = node.text?.toString() ?: ""
             val desc = node.contentDescription?.toString() ?: ""
             if (t.contains(text, ignoreCase = true) || desc.contains(text, ignoreCase = true)) {
@@ -119,7 +132,10 @@ class PaicotAccessibilityService : AccessibilityService() {
                 if (target != null && target.isClickable && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
                     val b = android.graphics.Rect()
                     target.getBoundsInScreen(b)
-                    clicked = JSONObject().put("text", t).put("center_x", b.centerX()).put("center_y", b.centerY())
+                    clicked = JSONObject()
+                        .put("text", t)
+                        .put("center_x", b.centerX())
+                        .put("center_y", b.centerY())
                 }
             }
         }
@@ -135,15 +151,34 @@ class PaicotAccessibilityService : AccessibilityService() {
         } else OperationResult.failure("No focused input node")
     }
 
-    private fun collect(node: AccessibilityNodeInfo?, depth: Int, visit: (AccessibilityNodeInfo) -> Unit) {
-        if (node == null || depth <= 0) return
-        visit(node)
-        for (i in 0 until node.childCount) {
-            collect(node.getChild(i), depth - 1, visit)
+    /**
+     * Iterative BFS. Bounded by node cap + deadline so a huge tree can never
+     * pin the caller thread.
+     */
+    private fun walkBreadthFirst(
+        root: AccessibilityNodeInfo,
+        deadlineNanos: Long,
+        maxNodes: Int,
+        visit: (AccessibilityNodeInfo) -> Unit
+    ) {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var seen = 0
+        while (queue.isNotEmpty() && seen < maxNodes && System.nanoTime() < deadlineNanos) {
+            val node = queue.removeFirst()
+            seen++
+            visit(node)
+            val count = node.childCount
+            for (i in 0 until count) {
+                val child = node.getChild(i)
+                if (child != null) queue.add(child)
+            }
         }
     }
 
     companion object {
         @Volatile var instance: PaicotAccessibilityService? = null
+        private const val MAX_VISITED_NODES = 1500
+        private const val FIND_DEADLINE_MS = 3500L
     }
 }

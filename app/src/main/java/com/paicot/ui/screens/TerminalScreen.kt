@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,12 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.paicot.core.ExecutionState
 import com.paicot.ui.state.TerminalState
 
 private val monoStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp, color = Color.White)
-private val monoSurface = Color(0xFF1A1A1C)
 
 @Composable
 fun TerminalScreen(state: TerminalState, onCodeChange: (String) -> Unit, onRun: () -> Unit, onCancel: () -> Unit) {
@@ -34,23 +36,41 @@ fun TerminalScreen(state: TerminalState, onCodeChange: (String) -> Unit, onRun: 
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Terminal", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text("Terminal", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
+        SectionTitle("Code")
         BasicTextField(
             value = state.code,
             onValueChange = onCodeChange,
             textStyle = monoStyle,
-            modifier = Modifier.fillMaxWidth().background(monoSurface, MaterialTheme.shapes.medium).padding(12.dp)
+            modifier = Modifier.fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.small)
+                .padding(12.dp)
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onRun, enabled = !state.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("Run") }
             TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop") }
         }
-        if (state.running) Text("Running...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.running) Text("Running...", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFFFB300))
         state.output?.let { out ->
-            Text("Output", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            val stateColor = when (out.state) {
+                ExecutionState.COMPLETED -> Color(0xFF66BB6A)
+                ExecutionState.FAILED -> MaterialTheme.colorScheme.error
+                ExecutionState.RUNNING -> Color(0xFFFFB300)
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            SectionTitle("Output")
+            Text(
+                "State: ${out.state.name}",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = stateColor
+            )
             SelectionContainer {
-                Column(modifier = Modifier.fillMaxWidth().background(monoSurface, MaterialTheme.shapes.medium).padding(12.dp)) {
-                    Text("State: ${out.state.name}", style = monoStyle)
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.small)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     if (out.stdout.isNotEmpty()) Text(out.stdout, style = monoStyle)
                     if (out.stderr.isNotEmpty()) Text(out.stderr, style = monoStyle)
                     if (!out.error.isNullOrEmpty()) Text("Error: ${out.error}", style = monoStyle)
@@ -59,9 +79,10 @@ fun TerminalScreen(state: TerminalState, onCodeChange: (String) -> Unit, onRun: 
             }
         }
         if (state.history.isNotEmpty()) {
-            Text("History", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            SectionTitle("History")
             state.history.forEach { item ->
                 Text("${item.id}  ${item.state.name}  ${item.durationMs} ms", style = monoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }

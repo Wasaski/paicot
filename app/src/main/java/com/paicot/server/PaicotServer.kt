@@ -49,6 +49,7 @@ class PaicotServer(private val context: Context) {
     private val serverSocket = java.util.concurrent.atomic.AtomicReference<ServerSocket?>(null)
     private val acceptThread = java.util.concurrent.atomic.AtomicReference<Thread?>(null)
     private val clientPool = Executors.newCachedThreadPool { r -> Thread(r, "paicot-http").apply { isDaemon = true } }
+    private val clientSemaphore = java.util.concurrent.Semaphore(24)
     private val wsClients = java.util.Collections.newSetFromMap(
         java.util.concurrent.ConcurrentHashMap<Socket, Boolean>())
     private val wsScope = CoroutineScope(Dispatchers.IO)
@@ -89,7 +90,13 @@ class PaicotServer(private val context: Context) {
                     while (!socket.isClosed) {
                         try {
                             val client = socket.accept()
-                            clientPool.submit { handleClient(client) }
+                            if (!clientSemaphore.tryAcquire()) {
+                                try { client.close() } catch (_: Exception) {}
+                                continue
+                            }
+                            clientPool.submit {
+                                try { handleClient(client) } finally { clientSemaphore.release() }
+                            }
                         } catch (e: java.net.SocketException) {
                             break
                         } catch (e: Exception) {
@@ -145,7 +152,7 @@ class PaicotServer(private val context: Context) {
 
     private fun handleClient(socket: Socket) {
         try {
-            socket.soTimeout = 15000
+            socket.soTimeout = 8000
             val input = socket.getInputStream()
             val output = socket.getOutputStream()
             val request = readRequest(input)
