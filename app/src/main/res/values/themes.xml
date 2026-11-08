@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Paicot" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/paicot_black</item>
+        <item name="android:colorPrimary">@color/paicot_red</item>
+        <item name="android:colorAccent">@color/paicot_red</item>
+        <item name="android:statusBarColor">@color/paicot_black</item>
+        <item name="android:navigationBarColor">@color/paicot_black</item>
+    </style>
+</resources>
