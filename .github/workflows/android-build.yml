@@ -57,14 +57,16 @@ jobs:
 
       - name: Verify APK exists
         run: |
+          echo "=== outputs ==="
+          find app/build/outputs/apk -type f | sort
           ls -lh app/build/outputs/apk/debug/
-          test -f app/build/outputs/apk/debug/app-debug.apk
+          ls app/build/outputs/apk/debug/*debug.apk >/dev/null 2>&1 || { echo "::error::No debug APK found"; exit 1; }
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: PAICOT-Android-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*debug.apk
           if-no-files-found: error
           retention-days: 90
 
@@ -145,13 +147,15 @@ jobs:
 
       - name: Verify APK exists
         run: |
+          echo "=== outputs ==="
+          find app/build/outputs/apk -type f | sort
           ls -lh app/build/outputs/apk/release/
-          test -f app/build/outputs/apk/release/app-release.apk
+          ls app/build/outputs/apk/release/*release.apk >/dev/null 2>&1 || { echo "::error::No release APK found"; exit 1; }
 
       - name: Upload Release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: PAICOT-Android-APK-Release
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/*release.apk
           if-no-files-found: error
           retention-days: 90
